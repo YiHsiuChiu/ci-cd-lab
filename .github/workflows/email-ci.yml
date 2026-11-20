@@ -23,14 +23,22 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 1. Build Docker Image
+      # Build Docker Image
       - name: Build Docker Image
         run: |
           docker build \
             -t emailservice-ci \
             ./src/emailservice
 
-      # 2. Start Email Server
+      # Run Unit Tests
+      - name: Run Unit Tests
+        run: |
+          docker run --rm \
+            --entrypoint sh \
+            emailservice-ci \
+            -c "pip install --no-cache-dir pytest==8.4.2 && python -m pytest -v tests/test_email.py"
+
+      # Start Email Server
       - name: Start Email Server
         run: |
           docker run -d \
@@ -38,8 +46,8 @@ jobs:
             -e PORT=8080 \
             -e DISABLE_PROFILER=1 \
             emailservice-ci
-
-      # 3. Smoke Test
+            
+      # Smoke Test
       - name: Verify Email Service
         run: |
           docker exec -i emailservice-ci python - <<'PY'
@@ -64,12 +72,12 @@ jobs:
               print("PASS: Email service responded successfully!")
           PY
 
-      # 4. Show logs
+      # Show logs
       - name: Show Server Logs
         if: always()
         run: docker logs emailservice-ci || true
 
-      # 5. Cleanup
+      # Cleanup
       - name: Cleanup
         if: always()
         run: docker rm -f emailservice-ci || true
