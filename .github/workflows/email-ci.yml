@@ -1,0 +1,83 @@
+name: Email Service CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/emailservice/**"
+      - ".github/workflows/email-ci.yml"
+  pull_request:
+    paths:
+      - "src/emailservice/**"
+      - ".github/workflows/email-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  email-service:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Build Docker Image
+      - name: Build Docker Image
+        run: |
+          docker build \
+            -t emailservice-ci \
+            ./src/emailservice
+
+      # Run Unit Tests
+      - name: Run Unit Tests
+        run: |
+          docker run --rm \
+            --entrypoint sh \
+            emailservice-ci \
+            -c "pip install --no-cache-dir pytest==8.4.2 && python -m pytest -v tests/test_email.py"
+
+      # Start Email Server
+      - name: Start Email Server
+        run: |
+          docker run -d \
+            --name emailservice-ci \
+            -e PORT=8080 \
+            -e DISABLE_PROFILER=1 \
+            emailservice-ci
+            
+      # Smoke Test
+      - name: Verify Email Service
+        run: |
+          docker exec -i emailservice-ci python - <<'PY'
+          import grpc
+          import demo_pb2
+          import demo_pb2_grpc
+
+          with grpc.insecure_channel("localhost:8080") as channel:
+              grpc.channel_ready_future(channel).result(timeout=30)
+
+              client = demo_pb2_grpc.EmailServiceStub(channel)
+              request = demo_pb2.SendOrderConfirmationRequest(
+                  email="ci-test@example.com",
+                  order=demo_pb2.OrderResult(order_id="ci-test-001")
+              )
+
+              response = client.SendOrderConfirmation(
+                  request, timeout=10
+              )
+              assert isinstance(response, demo_pb2.Empty)
+
+              print("PASS: Email service responded successfully!")
+          PY
+
+      # Show logs
+      - name: Show Server Logs
+        if: always()
+        run: docker logs emailservice-ci || true
+
+      # Cleanup
+      - name: Cleanup
+        if: always()
+        run: docker rm -f emailservice-ci || true
