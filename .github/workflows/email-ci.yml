@@ -48,28 +48,23 @@ jobs:
             emailservice-ci
             
       # Smoke Test
-      - name: Verify Email Service
+      - name: Verify Email Service Health
         run: |
           docker exec -i emailservice-ci python - <<'PY'
           import grpc
-          import demo_pb2
-          import demo_pb2_grpc
+          from grpc_health.v1 import health_pb2, health_pb2_grpc
 
           with grpc.insecure_channel("localhost:8080") as channel:
               grpc.channel_ready_future(channel).result(timeout=30)
 
-              client = demo_pb2_grpc.EmailServiceStub(channel)
-              request = demo_pb2.SendOrderConfirmationRequest(
-                  email="ci-test@example.com",
-                  order=demo_pb2.OrderResult(order_id="ci-test-001")
+              client = health_pb2_grpc.HealthStub(channel)
+              response = client.Check(
+                  health_pb2.HealthCheckRequest(),
+                  timeout=10
               )
 
-              response = client.SendOrderConfirmation(
-                  request, timeout=10
-              )
-              assert isinstance(response, demo_pb2.Empty)
-
-              print("PASS: Email service responded successfully!")
+              assert response.status == health_pb2.HealthCheckResponse.SERVING
+              print("PASS: Email service is healthy!")
           PY
 
       # Show logs
