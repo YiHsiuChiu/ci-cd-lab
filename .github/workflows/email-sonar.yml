@@ -1,0 +1,30 @@
+
+name: Email Service SonarQube
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/emailservice/**"
+      - "sonar-project.properties"
+      - ".github/workflows/email-sonar.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  sonar-scan:
+    name: SonarQube Scan
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v8.5.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
